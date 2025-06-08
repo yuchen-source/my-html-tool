@@ -86,7 +86,7 @@
       border: 1px solid #c0c0c0;
       border-radius: 8px;
       padding: 10px 18px; /* 調整內距 */
-      font-size: 20px; /* 調整字體大小 */
+      font-size: 14px; /* 調整字體大小 */
       cursor: pointer;
       transition: background-color 0.2s ease, transform 0.1s ease;
       margin-right: 10px; /* 按鈕間距 */
@@ -103,6 +103,38 @@
     }
 
     /* 特定按鈕顏色 */
+    #captureScreenButton {
+        background-color: #8DB580;
+        color: white;
+        border: none;
+        margin-top: 10px; /* 按鈕上方間距 */
+        margin-right: 10px; /* 按鈕間距 */
+    }
+    #captureScreenButton:hover {
+        background-color: #7fa573;
+    }
+    #exportDocument {
+        background-color: #999999;
+        color: white;
+        border: none;
+        margin-top: 10px; /* 按鈕上方間距 */
+        margin-right: 10px; /* 按鈕間距 */
+    }
+    #exportDocument:hover {
+        background-color: #787878;
+    }
+
+    #startScreenDrawButton {
+        background-color: #8DB580;
+        color: white;
+        border: none;
+        margin-top: 10px; /* 按鈕上方間距 */
+        margin-right: 10px; /* 按鈕間距 */
+    }
+    #startScreenDrawButton:hover {
+        background-color: #7fa573;
+    }
+    
     #saveDrawingButton {
         background-color: #8DB580;
         color: white;
@@ -111,7 +143,7 @@
         margin-right: 10px; /* 按鈕間距 */
     }
     #saveDrawingButton:hover {
-        background-color: #8DB580;
+        background-color: #7fa573;
     }
 
     #cancelDrawingButton {
@@ -191,12 +223,15 @@
     /* 繪圖 Canvas */
     #drawingCanvas {
       border: 1px solid #000;
-      max-width:100%; /* 截圖圖片佔比 */
+      max-width: 100%; /* 確保畫布寬度不超過父容器 */
+      height: auto;    /* 保持圖片比例，高度自動 */
       cursor: crosshair;
       margin-top: 10px;
       display: none; /* 預設隱藏 */
-      height: auto; /* 保持圖片比例 */
       background-color: #f8f8f8; /* 稍微帶點背景色 */
+      /* 增加一個最大高度，防止在極高解析度螢幕擷取時佔用太多空間 */
+      max-height: 70vh; /* 例如，最大高度為視窗高度的 70% */
+      object-fit: contain; /* 確保內容在畫布顯示區域內完整顯示 */
     }
 
     /* 匯出報告中的檔案名稱標題 */
@@ -233,7 +268,9 @@
     <div>
       <button onclick="takeScreenshotDirectly()" accesskey="s">直接截圖 Alt+S </button>
       <button onclick="startDrawingMode()"accesskey="a">截圖並繪圖 Alt+A </button>
-      <button onclick="exportDocument()">匯出HTML文件</button>
+      <button id="captureScreenButton" onclick="captureScreen()">擷取螢幕</button>
+      <button id="startScreenDrawButton" onclick="startScreenDrawingMode()">擷取螢幕並繪圖</button>
+      <button id="exportDocument" onclick="exportDocument()">匯出HTML文件</button>
     </div>
 
     <div style="margin-top: 20px;">
@@ -256,7 +293,6 @@
     const directScreenshotButton = document.querySelector('button[onclick="takeScreenshotDirectly()"]');
     const drawButton = document.querySelector('button[onclick="startDrawingMode()"]'); 
     const exportHtmlButton = document.querySelector('button[onclick="exportDocument()"]');
-
     const saveDrawingButton = document.getElementById('saveDrawingButton');
     const cancelDrawingButton = document.getElementById('cancelDrawingButton');
     const ctx = drawingCanvas.getContext('2d');
@@ -266,6 +302,8 @@
     let isDrawing = false;
     let lastX = 0;
     let lastY = 0;
+
+    let currentDrawingTimeLabel = null;
 
     // --- 影片載入與時間格式化 ---
     function loadVideo(event) {
@@ -286,6 +324,146 @@
       screenshots.push({ type: 'videoHeader', name: currentVideoFileName });
       
       renderScreenshots();
+    }
+
+    // --- 擷取螢幕 (靜態) ---
+    async function captureScreen() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+            alert('您的瀏覽器不支援螢幕擷取功能。建議使用 Chrome, Firefox 或 Edge 等現代瀏覽器。');
+            return;
+        }
+
+        try {
+            const stream = await navigator.mediaDevices.getDisplayMedia({
+                video: { mediaSource: 'screen' },
+                audio: false
+            });
+
+            const videoTrack = stream.getVideoTracks()[0];
+            if (!videoTrack) {
+                alert('無法獲取螢幕影片軌道。');
+                stream.getTracks().forEach(t => t.stop());
+                return;
+            }
+
+            const tempVideo = document.createElement('video');
+            tempVideo.style.display = 'none';
+            document.body.appendChild(tempVideo);
+            tempVideo.srcObject = stream;
+
+            await new Promise(resolve => {
+                tempVideo.onloadedmetadata = () => {
+                    tempVideo.play();
+                    resolve();
+                };
+            });
+            await new Promise(resolve => setTimeout(resolve, 50)); // Small delay for frame
+
+            const canvas = document.createElement('canvas');
+            canvas.width = tempVideo.videoWidth;
+            canvas.height = tempVideo.videoHeight;
+            const ctx = canvas.getContext('2d');
+
+            ctx.drawImage(tempVideo, 0, 0, canvas.width, canvas.height);
+
+            stream.getTracks().forEach(t => t.stop());
+            document.body.removeChild(tempVideo);
+
+            const dataUrl = canvas.toDataURL('image/png');
+            const timestamp = new Date().toLocaleString('zh-TW', {
+                hour: '2-digit', minute: '2-digit', second: '2-digit',
+                hour12: false
+            });
+
+            screenshots.push({
+                type: 'screenshot',
+                image: dataUrl,
+                description: '',
+                time: `螢幕擷取 @ ${timestamp}`, // 螢幕截圖會顯示「螢幕擷取 @ 時間」
+                completed: false
+            });
+            renderScreenshots();
+
+        } catch (err) {
+            if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                alert('您拒絕了螢幕擷取權限，無法執行此操作。');
+            } else if (err.name === 'NotFoundError') {
+                alert('沒有找到可用的螢幕來源。請確認是否有打開的視窗或螢幕可供分享。');
+            } else {
+                console.error("擷取螢幕時發生錯誤:", err);
+                alert('擷取螢幕時發生未知錯誤：' + err.message);
+            }
+        }
+    }
+
+    // --- 新增：擷取螢幕並繪圖 ---
+    async function startScreenDrawingMode() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+            alert('您的瀏覽器不支援螢幕擷取功能。建議使用 Chrome, Firefox 或 Edge。');
+            return;
+        }
+
+        try {
+            const stream = await navigator.mediaDevices.getDisplayMedia({
+                video: { mediaSource: 'screen' },
+                audio: false
+            });
+
+            const videoTrack = stream.getVideoTracks()[0];
+            if (!videoTrack) {
+                alert('無法獲取螢幕影片軌道。');
+                stream.getTracks().forEach(t => t.stop());
+                return;
+            }
+
+            const tempVideo = document.createElement('video');
+            tempVideo.style.display = 'none';
+            document.body.appendChild(tempVideo);
+            tempVideo.srcObject = stream;
+
+            await new Promise(resolve => {
+                tempVideo.onloadedmetadata = () => {
+                    tempVideo.play();
+                    resolve();
+                };
+            });
+            await new Promise(resolve => setTimeout(resolve, 50)); // Small delay for frame
+
+            // 設定繪圖 Canvas 的實際像素尺寸為擷取到的螢幕尺寸
+            drawingCanvas.width = tempVideo.videoWidth;
+            drawingCanvas.height = tempVideo.videoHeight;
+
+            ctx.drawImage(tempVideo, 0, 0, drawingCanvas.width, drawingCanvas.height);
+
+            stream.getTracks().forEach(t => t.stop());
+            document.body.removeChild(tempVideo);
+
+            // 設定繪圖模式的來源時間為螢幕擷取時間
+            currentDrawingTimeLabel = `螢幕擷取 @ ${new Date().toLocaleString('zh-TW', {
+                hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+            })}`;
+
+            // 顯示繪圖 UI 並隱藏其他按鈕
+            drawingCanvas.style.display = 'block';
+            directScreenshotButton.style.display = 'none';
+            exportHtmlButton.style.display = 'none';
+            drawButton.style.display = 'none';
+            captureScreenButton.style.display = 'none'; // 隱藏螢幕擷取按鈕
+            startScreenDrawButton.style.display = 'none'; // 隱藏螢幕繪圖按鈕 (自己)
+            
+            saveDrawingButton.style.display = 'inline-block';
+            cancelDrawingButton.style.display = 'inline-block';
+            video.pause(); // 即使螢幕擷取，也暫停影片（保持一致性）
+        } catch (err) {
+            if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                alert('您拒絕了螢幕擷取權限，無法執行此操作。');
+            } else if (err.name === 'NotFoundError') {
+                alert('沒有找到可用的螢幕來源。請確認是否有打開的視窗或螢幕可供分享。');
+            } else {
+                console.error("擷取螢幕時發生錯誤:", err);
+                alert('擷取螢幕時發生未知錯誤：' + err.message);
+            }
+        }
     }
 
     function formatTime(seconds) {
@@ -333,7 +511,7 @@
             alert("請先選擇一個影片檔案。");
             return;
         }
-      
+      currentDrawingTimeLabel = formatTime(video.currentTime);
       drawingCanvas.width = video.videoWidth;
       drawingCanvas.height = video.videoHeight;
       
@@ -346,6 +524,8 @@
       directScreenshotButton.style.display = 'none';
       exportHtmlButton.style.display = 'none';
       drawButton.style.display = 'none';
+      captureScreenButton.style.display = 'none'; // <-- 新增此行
+      startScreenDrawButton.style.display = 'none'; // <-- 新增此行
       saveDrawingButton.style.display = 'inline-block';
       cancelDrawingButton.style.display = 'inline-block';
       video.pause();
@@ -391,12 +571,13 @@
     function saveDrawingAndAddScreenshot() {
       const dataUrl = drawingCanvas.toDataURL('image/png'); // 指定輸出格式為 PNG
       const currentTime = video.currentTime;
+      const timeLabel = currentDrawingTimeLabel;
 
       screenshots.push({
         type: 'screenshot', // 標記為截圖類型
         image: dataUrl,
         description: '',
-        time: formatTime(currentTime),
+        time: timeLabel,
         completed: false // 新增：預設為未完成
       });
 
@@ -415,9 +596,12 @@
         directScreenshotButton.style.display = 'inline-block';
         exportHtmlButton.style.display = 'inline-block';
         drawButton.style.display = 'inline-block';
+        captureScreenButton.style.display = 'inline-block'; // <-- 新增此行
+        startScreenDrawButton.style.display = 'inline-block'; // <-- 新增此行
         
         saveDrawingButton.style.display = 'none';
         cancelDrawingButton.style.display = 'none';
+        currentDrawingTimeLabel = null;
     }
 
     function clearDrawingCanvas() {
