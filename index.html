@@ -29,14 +29,16 @@
     }
 
     /* 影片樣式 */
-    video {
-      width: 100%; /* 讓影片和 Canvas 佔滿父容器的寬度 */
-      height: auto; /* 高度自動，保持比例 */
-      display: block; /* 讓影片下方空間更整齊 */
-      margin-bottom: 5px;
-      background: #000;
-      border-radius: 8px;
-    }
+	video {
+		width: 100%;
+		/* 讓影片區域在沒有載入影片時也能佔據空間，並有黑色背景 */
+		height: 400px; /* 設定一個預設高度 */
+		object-fit: contain; /* 確保影片內容在設定的高度內完整顯示 */
+		display: block;
+		margin-bottom: 5px;
+		background: #000;
+		border-radius: 8px;
+	}
 
     /* 截圖列表中的單個截圖樣式 */
     .screenshot {
